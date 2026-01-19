@@ -3,19 +3,22 @@ import {
   NotFoundException,
   BadRequestException,
   ForbiddenException,
-} from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model, Types } from 'mongoose';
-import { ConfigService } from '@nestjs/config';
-import { Order, OrderDocument } from './schemas/order.schema';
-import { CreateOrderDto } from './dto/create-order.dto';
-import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
-import { AssignDeliveryDto } from './dto/assign-delivery.dto';
-import { OrderStatus, isValidStatusTransition } from './enums/order-status.enum';
-import { CatalogService } from '../catalog/catalog.service';
-import { UsersService } from '../users/users.service';
-import { UserRole } from '../users/enums/user-role.enum';
-import { UserDocument } from '../users/schemas/user.schema';
+} from "@nestjs/common";
+import { InjectModel } from "@nestjs/mongoose";
+import { Model, Types } from "mongoose";
+import { ConfigService } from "@nestjs/config";
+import { Order, OrderDocument } from "./schemas/order.schema";
+import { CreateOrderDto } from "./dto/create-order.dto";
+import { UpdateOrderStatusDto } from "./dto/update-order-status.dto";
+import { AssignDeliveryDto } from "./dto/assign-delivery.dto";
+import {
+  OrderStatus,
+  isValidStatusTransition,
+} from "./enums/order-status.enum";
+import { CatalogService } from "../catalog/catalog.service";
+import { UsersService } from "../users/users.service";
+import { UserRole } from "../users/enums/user-role.enum";
+import { UserDocument } from "../users/schemas/user.schema";
 
 /**
  * Orders service - handles order creation, status updates, and queries.
@@ -32,13 +35,18 @@ export class OrdersService {
   /**
    * Create a new order.
    */
-  async createOrder(userId: string, dto: CreateOrderDto): Promise<OrderDocument> {
+  async createOrder(
+    userId: string,
+    dto: CreateOrderDto,
+  ): Promise<OrderDocument> {
     // Calculate pricing for all items
     const itemsWithPricing = [];
     let itemsTotal = 0;
 
     for (const item of dto.items) {
-      const clothingItem = await this.catalogService.getClothingItemById(item.clothingItemId);
+      const clothingItem = await this.catalogService.getClothingItemById(
+        item.clothingItemId,
+      );
 
       // Calculate price for each service
       let unitPrice = 0;
@@ -72,7 +80,9 @@ export class OrdersService {
     }
 
     // Get delivery charge from config
-    const deliveryCharge = this.configService.get<number>('DEFAULT_DELIVERY_CHARGE', 60);
+    const deliveryCharge = Number(
+      this.configService.get("DEFAULT_DELIVERY_CHARGE", 60),
+    );
     const grandTotal = itemsTotal + deliveryCharge;
 
     // Create order
@@ -95,7 +105,7 @@ export class OrdersService {
         {
           status: OrderStatus.REQUESTED,
           timestamp: new Date(),
-          note: 'Order placed',
+          note: "Order placed",
           updatedBy: new Types.ObjectId(userId),
         },
       ],
@@ -111,7 +121,7 @@ export class OrdersService {
     return this.orderModel
       .find({ customer: new Types.ObjectId(userId) })
       .sort({ createdAt: -1 })
-      .populate('deliveryPerson', 'fullName phoneNumber')
+      .populate("deliveryPerson", "fullName phoneNumber")
       .exec();
   }
 
@@ -125,7 +135,7 @@ export class OrdersService {
         status: { $nin: [OrderStatus.DELIVERED, OrderStatus.CANCELLED] },
       })
       .sort({ createdAt: -1 })
-      .populate('customer', 'fullName phoneNumber')
+      .populate("customer", "fullName phoneNumber")
       .exec();
   }
 
@@ -155,8 +165,8 @@ export class OrdersService {
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(limit)
-      .populate('customer', 'fullName phoneNumber')
-      .populate('deliveryPerson', 'fullName phoneNumber')
+      .populate("customer", "fullName phoneNumber")
+      .populate("deliveryPerson", "fullName phoneNumber")
       .exec();
 
     return { orders, total, page, totalPages };
@@ -165,15 +175,18 @@ export class OrdersService {
   /**
    * Get a single order by ID.
    */
-  async getOrderById(orderId: string, user: UserDocument): Promise<OrderDocument> {
+  async getOrderById(
+    orderId: string,
+    user: UserDocument,
+  ): Promise<OrderDocument> {
     const order = await this.orderModel
       .findById(orderId)
-      .populate('customer', 'fullName phoneNumber address')
-      .populate('deliveryPerson', 'fullName phoneNumber')
+      .populate("customer", "fullName phoneNumber address")
+      .populate("deliveryPerson", "fullName phoneNumber")
       .exec();
 
     if (!order) {
-      throw new NotFoundException('Order not found');
+      throw new NotFoundException("Order not found");
     }
 
     // Check access permissions
@@ -183,7 +196,7 @@ export class OrdersService {
     const isAdmin = user.role === UserRole.ADMIN;
 
     if (!isCustomer && !isDelivery && !isAdmin) {
-      throw new ForbiddenException('Access denied to this order');
+      throw new ForbiddenException("Access denied to this order");
     }
 
     return order;
@@ -200,7 +213,7 @@ export class OrdersService {
     const order = await this.orderModel.findById(orderId).exec();
 
     if (!order) {
-      throw new NotFoundException('Order not found');
+      throw new NotFoundException("Order not found");
     }
 
     // Validate status transition
@@ -217,7 +230,9 @@ export class OrdersService {
 
     // Only delivery person or admin can update status
     if (!isDelivery && !isAdmin) {
-      throw new ForbiddenException('Only delivery person or admin can update order status');
+      throw new ForbiddenException(
+        "Only delivery person or admin can update order status",
+      );
     }
 
     // Update status
@@ -225,7 +240,7 @@ export class OrdersService {
     order.statusHistory.push({
       status: dto.status,
       timestamp: new Date(),
-      note: dto.note || '',
+      note: dto.note || "",
       updatedBy: new Types.ObjectId(userId),
     });
 
@@ -242,17 +257,19 @@ export class OrdersService {
     const order = await this.orderModel.findById(orderId).exec();
 
     if (!order) {
-      throw new NotFoundException('Order not found');
+      throw new NotFoundException("Order not found");
     }
 
     // Verify delivery person exists and has delivery role
-    const deliveryPerson = await this.usersService.findById(dto.deliveryPersonId);
+    const deliveryPerson = await this.usersService.findById(
+      dto.deliveryPersonId,
+    );
     if (!deliveryPerson) {
-      throw new NotFoundException('Delivery person not found');
+      throw new NotFoundException("Delivery person not found");
     }
 
     if (deliveryPerson.role !== UserRole.DELIVERY) {
-      throw new BadRequestException('User is not a delivery person');
+      throw new BadRequestException("User is not a delivery person");
     }
 
     order.deliveryPerson = new Types.ObjectId(dto.deliveryPersonId);
@@ -269,7 +286,7 @@ export class OrdersService {
         status: OrderStatus.REQUESTED,
       })
       .sort({ createdAt: 1 }) // Oldest first
-      .populate('customer', 'fullName phoneNumber')
+      .populate("customer", "fullName phoneNumber")
       .exec();
   }
 
@@ -292,7 +309,7 @@ export class OrdersService {
       this.orderModel.aggregate([
         {
           $group: {
-            _id: '$status',
+            _id: "$status",
             count: { $sum: 1 },
           },
         },
@@ -307,7 +324,7 @@ export class OrdersService {
           $group: {
             _id: null,
             count: { $sum: 1 },
-            revenue: { $sum: '$pricing.grandTotal' },
+            revenue: { $sum: "$pricing.grandTotal" },
           },
         },
       ]),
@@ -321,7 +338,9 @@ export class OrdersService {
       {} as Record<string, number>,
     );
 
-    const totalOrders: number = (Object.values(statusCounts) as number[]).reduce((a, b) => a + b, 0);
+    const totalOrders: number = (
+      Object.values(statusCounts) as number[]
+    ).reduce((a, b) => a + b, 0);
 
     return {
       totalOrders,
