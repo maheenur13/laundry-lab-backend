@@ -59,9 +59,10 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, swaggerConfig);
   SwaggerModule.setup(`${apiPrefix}/docs`, app, document);
 
-  await app.listen(port);
-  console.log(`🚀 LaundryBD API running on: http://localhost:${port}/${apiPrefix}/${apiVersion}`);
-  console.log(`📚 Swagger docs available at: http://localhost:${port}/${apiPrefix}/docs`);
+  // Bind to 0.0.0.0 for cloud deployments (Render, Railway, etc.)
+  await app.listen(port, '0.0.0.0');
+  console.log(`🚀 LaundryBD API running on port ${port}`);
+  console.log(`📚 Swagger docs available at: /api/docs`);
 }
 
 bootstrap();

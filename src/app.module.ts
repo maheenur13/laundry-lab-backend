@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, Controller, Get } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ThrottlerModule } from '@nestjs/throttler';
@@ -14,6 +14,17 @@ import { OrdersModule } from './orders/orders.module';
 // Common
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
+
+/**
+ * Health check controller for root path (Render health checks)
+ */
+@Controller()
+class HealthController {
+  @Get()
+  health() {
+    return { status: 'ok', service: 'LaundryBD API', timestamp: new Date().toISOString() };
+  }
+}
 
 /**
  * Root application module that orchestrates all feature modules.
@@ -56,6 +67,7 @@ import { ResponseInterceptor } from './common/interceptors/response.interceptor'
     CatalogModule,
     OrdersModule,
   ],
+  controllers: [HealthController],
   providers: [
     // Global rate limiting guard
     {
