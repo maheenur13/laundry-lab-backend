@@ -14,7 +14,9 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
-    "script:add-delivery": "ts-node -r tsconfig-paths/register scripts/add-delivery-person.ts"
+    "script:add-delivery": "ts-node -r tsconfig-paths/register scripts/add-delivery-person.ts",
+    "script:assign-order": "ts-node -r tsconfig-paths/register scripts/assign-order.ts",
+    "script:get-delivery": "ts-node -r tsconfig-paths/register scripts/get-delivery-personnel.ts"
   },
   "keywords": [
     "nestjs",
