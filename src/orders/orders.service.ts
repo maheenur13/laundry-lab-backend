@@ -140,6 +140,148 @@ export class OrdersService {
   }
 
   /**
+   * Get delivery history for a delivery person (completed orders).
+   */
+  async getDeliveryHistory(userId: string): Promise<OrderDocument[]> {
+    return this.orderModel
+      .find({
+        deliveryPerson: new Types.ObjectId(userId),
+        status: { $in: [OrderStatus.DELIVERED, OrderStatus.CANCELLED] },
+      })
+      .sort({ createdAt: -1 })
+      .populate("customer", "fullName phoneNumber")
+      .exec();
+  }
+
+  /**
+   * Get delivery statistics for a delivery person.
+   */
+  async getDeliveryStats(userId: string): Promise<{
+    totalDeliveries: number;
+    completedDeliveries: number;
+    cancelledDeliveries: number;
+    todayDeliveries: number;
+    thisWeekDeliveries: number;
+    thisMonthDeliveries: number;
+    totalRevenue: number;
+    averageDeliveryTime: number; // in hours
+  }> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const thisWeek = new Date();
+    thisWeek.setDate(thisWeek.getDate() - 7);
+
+    const thisMonth = new Date();
+    thisMonth.setMonth(thisMonth.getMonth() - 1);
+
+    const deliveryPersonId = new Types.ObjectId(userId);
+
+    const [
+      allStats,
+      todayStats,
+      weekStats,
+      monthStats,
+      revenueStats,
+      avgTimeStats,
+    ] = await Promise.all([
+      // All time stats
+      this.orderModel.aggregate([
+        { $match: { deliveryPerson: deliveryPersonId } },
+        {
+          $group: {
+            _id: "$status",
+            count: { $sum: 1 },
+          },
+        },
+      ]),
+      // Today stats
+      this.orderModel.countDocuments({
+        deliveryPerson: deliveryPersonId,
+        status: OrderStatus.DELIVERED,
+        updatedAt: { $gte: today },
+      }),
+      // This week stats
+      this.orderModel.countDocuments({
+        deliveryPerson: deliveryPersonId,
+        status: OrderStatus.DELIVERED,
+        updatedAt: { $gte: thisWeek },
+      }),
+      // This month stats
+      this.orderModel.countDocuments({
+        deliveryPerson: deliveryPersonId,
+        status: OrderStatus.DELIVERED,
+        updatedAt: { $gte: thisMonth },
+      }),
+      // Revenue stats
+      this.orderModel.aggregate([
+        {
+          $match: {
+            deliveryPerson: deliveryPersonId,
+            status: OrderStatus.DELIVERED,
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalRevenue: { $sum: "$pricing.grandTotal" },
+          },
+        },
+      ]),
+      // Average delivery time
+      this.orderModel.aggregate([
+        {
+          $match: {
+            deliveryPerson: deliveryPersonId,
+            status: OrderStatus.DELIVERED,
+          },
+        },
+        {
+          $addFields: {
+            deliveryTime: {
+              $divide: [
+                { $subtract: ["$updatedAt", "$createdAt"] },
+                1000 * 60 * 60, // Convert to hours
+              ],
+            },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            avgTime: { $avg: "$deliveryTime" },
+          },
+        },
+      ]),
+    ]);
+
+    const statusCounts = allStats.reduce(
+      (acc, item) => {
+        acc[item._id as string] = item.count as number;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
+
+    const totalDeliveries = (Object.values(statusCounts) as number[]).reduce(
+      (a, b) => a + b,
+      0,
+    );
+
+    return {
+      totalDeliveries,
+      completedDeliveries: statusCounts[OrderStatus.DELIVERED] || 0,
+      cancelledDeliveries: statusCounts[OrderStatus.CANCELLED] || 0,
+      todayDeliveries: todayStats || 0,
+      thisWeekDeliveries: weekStats || 0,
+      thisMonthDeliveries: monthStats || 0,
+      totalRevenue: revenueStats[0]?.totalRevenue || 0,
+      averageDeliveryTime:
+        Math.round((avgTimeStats[0]?.avgTime || 0) * 100) / 100,
+    };
+  }
+
+  /**
    * Get all orders (admin only).
    */
   async getAllOrders(
